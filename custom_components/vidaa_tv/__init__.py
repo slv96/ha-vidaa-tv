@@ -6,7 +6,7 @@ import json
 import logging
 from functools import lru_cache
 from dataclasses import dataclass
-from functools import partial
+from pathlib import Path
 
 import voluptuous as vol
 
@@ -25,12 +25,7 @@ from homeassistant.const import (
     CONF_URL,
 )
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.exceptions import (
-    ConfigEntryAuthFailed,
-    ConfigEntryNotReady,
-    HomeAssistantError,
-    ServiceValidationError,
-)
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import target as target_helpers
@@ -50,7 +45,6 @@ from .const import (
 )
 from .coordinator import (
     VidaaTVDataUpdateCoordinator,
-    async_is_reachable,
     clear_saved_token,
     create_tv_client,
     get_token_storage,
@@ -180,21 +174,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: VidaaTVConfigEntry) -> b
 
     tv = create_tv_client(hass, host, port, mac)
 
-    # Try to connect
-    try:
-        connected = await tv.async_connect(timeout=10)
-        if not connected:
-            await _async_raise_if_auth_failed(hass, host, port, mac)
-            raise ConfigEntryNotReady("Failed to connect to TV")
-    except (ConfigEntryAuthFailed, ConfigEntryNotReady):
-        raise
-    except Exception as err:
-        _LOGGER.debug("Error connecting to TV: %s", err)
-        raise ConfigEntryNotReady("Error connecting to TV") from err
-
     # Create coordinator for data updates
     coordinator = VidaaTVDataUpdateCoordinator(hass, tv, entry)
-    await coordinator.async_config_entry_first_refresh()
+
+    # A powered-off TV may take its network interface and MQTT broker offline.
+    # Do not fail config entry setup in that case: the media player must still
+    # be created so it can send Wake-on-LAN. The coordinator will keep retrying
+    # and populate live data after the TV becomes reachable.
+    await coordinator.async_refresh()
 
     # Store runtime data
     entry.runtime_data = VidaaTVRuntimeData(coordinator=coordinator)
@@ -206,25 +193,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: VidaaTVConfigEntry) -> b
     entry.async_on_unload(entry.add_update_listener(async_update_options))
 
     return True
-
-
-async def _async_raise_if_auth_failed(
-    hass: HomeAssistant, host: str, port: int, mac: str | None
-) -> None:
-    """Ask to pair again when the TV is up but the saved token is not usable.
-
-    Without this, an expired token makes setup retry forever and the only way
-    out is removing and re-adding the TV.
-    """
-    if not await async_is_reachable(host, port):
-        return
-    status = await hass.async_add_executor_job(
-        partial(get_token_storage(hass).get_token_status, device_id=mac, host=host, port=port)
-    )
-    if not status["access_valid"]:
-        raise ConfigEntryAuthFailed(
-            "The TV rejected the saved credentials. Please re-pair with the TV."
-        )
 
 
 async def _async_setup_services(hass: HomeAssistant) -> None:
