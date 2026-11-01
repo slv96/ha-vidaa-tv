@@ -28,6 +28,7 @@ from .const import (
     CONF_PORT,
     CONF_DEVICE_ID,
     CONF_MAC,
+    CONF_WOL_MAC,
     CONF_MODEL,
     CONF_SW_VERSION,
     DEFAULT_NAME,
@@ -453,9 +454,16 @@ class VidaaTVOptionsFlow(config_entries.OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Manage the options."""
+        errors: dict[str, str] = {}
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            wol_mac = (user_input.get(CONF_WOL_MAC) or "").strip().replace("-", ":").upper()
+            if wol_mac and not re.fullmatch(r"([0-9A-F]{2}:){5}[0-9A-F]{2}", wol_mac):
+                errors[CONF_WOL_MAC] = "invalid_mac"
+            else:
+                user_input[CONF_WOL_MAC] = wol_mac
+                return self.async_create_entry(title="", data=user_input)
 
+        current_wol_mac = self.config_entry.options.get(CONF_WOL_MAC, "")
         current_interval = self.config_entry.options.get("scan_interval", SCAN_INTERVAL)
 
         return self.async_show_form(
@@ -474,6 +482,11 @@ class VidaaTVOptionsFlow(config_entries.OptionsFlow):
                             unit_of_measurement="seconds",
                         )
                     ),
+                    vol.Optional(
+                        CONF_WOL_MAC,
+                        description={"suggested_value": current_wol_mac},
+                    ): str,
                 }
             ),
+            errors=errors,
         )

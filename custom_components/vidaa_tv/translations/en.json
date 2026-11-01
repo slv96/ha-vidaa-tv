@@ -47,12 +47,17 @@
         "title": "Vidaa TV Options",
         "description": "Configure options for your Vidaa TV.",
         "data": {
-          "scan_interval": "Polling interval"
+          "scan_interval": "Polling interval",
+          "wol_mac": "Wake-on-LAN MAC address"
         },
         "data_description": {
-          "scan_interval": "How often to poll the TV for state updates (in seconds)."
+          "scan_interval": "How often to poll the TV for state updates (in seconds).",
+          "wol_mac": "MAC address the Wake-on-LAN packet is sent to (e.g. the TV's Ethernet MAC). Leave empty to use the paired MAC."
         }
       }
+    },
+    "error": {
+      "invalid_mac": "Invalid MAC address (expected AA:BB:CC:DD:EE:FF)."
     }
   },
   "exceptions": {

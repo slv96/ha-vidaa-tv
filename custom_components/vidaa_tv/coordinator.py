@@ -26,6 +26,7 @@ from .const import (
     SCAN_INTERVAL,
     STATE_FAKE_SLEEP,
     CONF_MAC,
+    CONF_WOL_MAC,
     CONF_HOST,
     CONF_PORT,
     CONF_DEVICE_ID,
@@ -340,8 +341,8 @@ class VidaaTVDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def async_turn_on(self) -> None:
         """Turn TV on using WoL and power command."""
-        # Use MAC directly from config entry
-        mac = self.entry.data.get(CONF_MAC)
+        # WoL MAC option (e.g. the Ethernet MAC) wins over the pairing MAC
+        mac = self.entry.options.get(CONF_WOL_MAC) or self.entry.data.get(CONF_MAC)
         if mac:
             host = self.entry.data.get(CONF_HOST, "")
             subnet = host.rsplit(".", 1)[0] if "." in host else None
